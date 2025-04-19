@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Credit Card Partner Comparison</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/venn.js@0.2.20/venn.min.js"></script>
+
+    <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body {
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+            background-color: #f3f4f6;
+        }
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+        .venn-diagram-container .venn-circle path {
+            stroke-width: 3;
+            stroke: #60a5fa;
+            stroke-opacity: 0.8;
+            fill: #bfdbfe;
+            fill-opacity: 0.3;
+            transition: fill-opacity 0.2s ease, stroke-opacity 0.2s ease;
+        }
+         .venn-diagram-container .venn-circle:hover path {
+             fill-opacity: 0.5;
+             stroke-opacity: 1;
+         }
+        /* Text inside diagram for counts */
+        .venn-diagram-container .venn-intersection text,
+        .venn-diagram-container .venn-circle text {
+            fill: #1f2937;
+            font-size: 11px;
+            font-weight: 600;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+         .venn-diagram-container text tspan {
+             text-anchor: middle;
+         }
+         .venntooltip {
+            position: absolute;
+            text-align: center;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            pointer-events: none;
+            white-space: nowrap;
+            transition: opacity 0.2s ease;
+            z-index: 50;
+            opacity: 0;
+        }
+        .partner-category-title {
+            font-weight: 600;
+            color: #4b5563;
+            margin-top: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .tool-link {
+            color: #2563eb;
+            text-decoration: underline;
+            transition: color 0.2s ease;
+        }
+        .tool-link:hover {
+            color: #1d4ed8;
+        }
+        .footnote {
+            font-size: 0.75rem; /* text-xs */
+            color: #6b7280; /* gray-500 */
+            margin-top: 1.5rem; /* Increased margin-top */
+            margin-bottom: 1.5rem; /* Added margin-bottom */
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback, memo } = React;
+
+        // --- Data with Categories (Verified & Updated April 2025) ---
+        const transferPartnersData = {
+          amex: {
+            name: "Amex",
+            airlines: new Set([ "Aer Lingus", "Aeromexico", "Air Canada (Aeroplan)", "Air France/KLM (Flying Blue)", "Alaska Airlines Mileage Plan", "ANA (Mileage Club)", "Avianca (LifeMiles)", "British Airways (Executive Club)", "Cathay Pacific (Asia Miles)", "Delta (SkyMiles)", "Emirates (Skywards)", "Etihad (Guest)", "Hawaiian Airlines (HawaiianMiles)", "Iberia (Plus)", "JetBlue (TrueBlue)", "Qantas (Frequent Flyer)", "Qatar Airways (Privilege Club)", "Singapore Airlines (KrisFlyer)", "Virgin Atlantic (Flying Club)" ]),
+            hotels: new Set(["Choice Privileges", "Hilton Honors", "Marriott Bonvoy"])
+          },
+          bilt: {
+            name: "Bilt",
+            airlines: new Set([ "Aer Lingus", "Air Canada (Aeroplan)", "Air France/KLM (Flying Blue)", "Alaska Airlines Mileage Plan", "American Airlines (AAdvantage)", "Avianca (LifeMiles)", "British Airways (Executive Club)", "Cathay Pacific (Asia Miles)", "Emirates (Skywards)", "Iberia (Plus)", "TAP Air Portugal Miles&Go", "Turkish Airlines (Miles&Smiles)", "United (MileagePlus)", "Virgin Atlantic (Flying Club)" ]),
+            hotels: new Set(["Accor Live Limitless", "IHG One Rewards", "Marriott Bonvoy", "World of Hyatt"])
+           },
+          chase: {
+            name: "Chase",
+            airlines: new Set([ "Aer Lingus", "Air Canada (Aeroplan)", "Air France/KLM (Flying Blue)", "British Airways (Executive Club)", "Emirates (Skywards)", "Iberia (Plus)", "JetBlue (TrueBlue)", "Singapore Airlines (KrisFlyer)", "Southwest Airlines (Rapid Rewards)", "United (MileagePlus)", "Virgin Atlantic (Flying Club)" ]),
+            hotels: new Set(["IHG One Rewards", "Marriott Bonvoy", "World of Hyatt"])
+           },
+          capone: {
+            name: "Capital One",
+            airlines: new Set([ "Aeromexico (Club Premier)", "Air Canada (Aeroplan)", "Air France/KLM (Flying Blue)", "Avianca (LifeMiles)", "British Airways (Executive Club)", "Cathay Pacific (Asia Miles)", "Emirates (Skywards)", "Etihad (Guest)", "EVA Air (Infinity MileageLands)", "Finnair (Plus)", "Qantas (Frequent Flyer)", "Singapore Airlines (KrisFlyer)", "TAP Air Portugal (Miles&Go)", "Turkish Airlines (Miles&Smiles)", "Virgin Atlantic (Flying Club)" ]),
+            hotels: new Set(["Accor Live Limitless", "Choice Privileges", "Wyndham Rewards"])
+           },
+          citi: {
+            name: "Citi",
+            airlines: new Set([ "Aeromexico (Club Premier)", "Air France/KLM (Flying Blue)", "Avianca (LifeMiles)", "Cathay Pacific (Asia Miles)", "Emirates (Skywards)", "Etihad (Guest)", "EVA Air (Infinity MileageLands)", "JetBlue (TrueBlue)", "Qantas (Frequent Flyer)", "Qatar Airways (Privilege Club)", "Singapore Airlines (KrisFlyer)", "Thai Airways (Royal Orchid Plus)", "Turkish Airlines (Miles&Smiles)", "Virgin Atlantic (Flying Club)" ]),
+            hotels: new Set(["Choice Privileges", "Leading Hotels of the World", "Wyndham Rewards"])
+           }
+        };
+        const programKeys = Object.keys(transferPartnersData);
+        const getAllPartners = (programKey) => { const data = transferPartnersData[programKey]; if (!data) return new Set(); return new Set([...(data.airlines || []), ...(data.hotels || [])]); };
+
+        // --- Simple UI Components ---
+        const Card = ({ children, className = '', ...props }) => <div className={`rounded-lg border bg-white text-gray-800 shadow-sm ${className}`} {...props}>{children}</div>;
+        const CardHeader = ({ children, className = '', ...props }) => <div className={`flex flex-col space-y-1.5 p-4 pb-2 ${className}`} {...props}>{children}</div>;
+        const CardTitle = ({ children, className = '', ...props }) => <h3 className={`text-base font-semibold leading-none tracking-tight ${className}`} {...props}>{children}</h3>;
+        const CardContent = ({ children, className = '', ...props }) => <div className={`p-4 pt-0 ${className}`} {...props}>{children}</div>;
+        const Separator = ({ className = '', ...props }) => <div className={`shrink-0 bg-gray-200 h-[1px] w-full ${className}`} {...props} />;
+
+        // --- Function to get partners unique to a specific Venn segment ---
+        const getUniquePartnersForSegment = (segmentSet, allVennData) => { const areaData = allVennData.find(d => d.sets.length === segmentSet.length && d.sets.every(s => segmentSet.includes(s))); if (!areaData) return []; const intersectionPartners = areaData.partners; let uniqueToSegmentPartners = new Set(); intersectionPartners.forEach(partner => { let isInHigherOrderIntersection = false; allVennData.forEach(higherArea => { if (higherArea.sets.length > areaData.sets.length && higherArea.partners.has(partner)) { if (areaData.sets.every(s => higherArea.sets.includes(s))) { isInHigherOrderIntersection = true; } } }); if (!isInHigherOrderIntersection) { let belongsToAllInSegment = segmentSet.every(key => getAllPartners(key).has(partner)); if(belongsToAllInSegment) { uniqueToSegmentPartners.add(partner); } } }); allVennData.forEach(specificArea => { if (specificArea.sets.length > segmentSet.length && segmentSet.every(s => specificArea.sets.includes(s))) { specificArea.partners.forEach(p => { if (uniqueToSegmentPartners.has(p)) { uniqueToSegmentPartners.delete(p); } }); } }); return [...uniqueToSegmentPartners].sort(); };
+
+
+        // --- Venn Diagram Component ---
+        const VennDiagram = memo(({ data, partnerDetails }) => {
+          const vennRef = useRef(null);
+          const tooltipRef = useRef(null);
+
+          useEffect(() => {
+            const container = vennRef.current;
+            if (!container || !data || data.length === 0) { if (container) container.innerHTML = ''; return; }
+            if (typeof d3 === 'undefined' || typeof venn === 'undefined') { console.error("D3/Venn not loaded!"); container.innerHTML = '<p class="text-red-500">Error: Charting library missing.</p>'; return; }
+            container.innerHTML = '';
+
+            try {
+              const chart = venn.VennDiagram().width(Math.min(container.clientWidth || 500, 500)).height(Math.min((container.clientWidth || 500) * 0.8, 400));
+              const div = d3.select(container);
+              const svgContainer = div.append("svg").attr("width", chart.width()).attr("height", chart.height()).attr("class", "venn-diagram-container");
+              const vennGroup = svgContainer.append("g");
+              vennGroup.datum(data).call(chart);
+
+              // --- Modify Text Labels to Show Counts ---
+              vennGroup.selectAll("g")
+                .each(function(d) {
+                    const group = d3.select(this);
+                    const textElement = group.select("text");
+                    const segmentSet = d.sets;
+                    const detailInfo = partnerDetails.find(detail => { const detailSetKeys = detail.id.substring(5).split('-'); return detailSetKeys.length === segmentSet.length && detailSetKeys.every(k => segmentSet.includes(k)); });
+                    const airlineCount = detailInfo?.airlinePartners?.length || 0;
+                    const hotelCount = detailInfo?.hotelPartners?.length || 0;
+                    textElement.text('');
+                    let dyOffset = 0;
+                    if (airlineCount > 0 && hotelCount > 0) { dyOffset = -0.6; }
+                    if (airlineCount > 0) { textElement.append("tspan").attr("x", textElement.attr("x")).attr("dy", dyOffset + "em").text(`Airline: ${airlineCount}`); dyOffset = 1.2; }
+                    if (hotelCount > 0) { textElement.append("tspan").attr("x", textElement.attr("x")).attr("dy", dyOffset + "em").text(`Hotels: ${hotelCount}`); }
+                    if (airlineCount === 0 && hotelCount === 0 && d.size > 0) { textElement.text(''); }
+                });
+
+              // --- Tooltip Setup ---
+              if (!tooltipRef.current) { let existingTooltip = d3.select("body").select(".venntooltip"); if (!existingTooltip.empty()) { tooltipRef.current = existingTooltip.node(); } else { tooltipRef.current = d3.select("body").append("div").attr("class", "venntooltip").node(); } }
+              const tooltip = d3.select(tooltipRef.current);
+              vennGroup.selectAll("g").on("mouseover", function(d) { venn.sortAreas(vennGroup, d); tooltip.transition().duration(200).style("opacity", 1); const detailInfo = partnerDetails.find(detail => detail.id === "list-" + d.sets.join('-')); let segmentTitle = detailInfo ? detailInfo.title : d.sets.map(k => transferPartnersData[k]?.name || k).join(' & ') + ` (${d.size})`; tooltip.html(segmentTitle.replace(/ *\([^)]*\) */g, "") + `<br><b>${d.size}</b> partners total`); const listId = "list-" + d.sets.join('-'); const listElem = document.getElementById(listId); if(listElem) listElem.style.backgroundColor = '#e0e7ff'; }).on("mousemove", function() { tooltip.style("left", (d3.event.pageX + 15) + "px").style("top", (d3.event.pageY - 20) + "px"); }).on("mouseout", function(d) { tooltip.transition().duration(500).style("opacity", 0); const listId = "list-" + d.sets.join('-'); const listElem = document.getElementById(listId); if(listElem) listElem.style.backgroundColor = ''; });
+
+            } catch (error) { console.error("Error rendering Venn diagram:", error); container.innerHTML = '<p class="text-center text-red-500">Could not render diagram.</p>'; }
+          }, [data, partnerDetails]);
+
+          useEffect(() => { return () => { if (tooltipRef.current) { d3.select(tooltipRef.current).style("opacity", 0); } }; }, []);
+
+          return <div ref={vennRef} className="min-h-[300px] md:min-h-[400px] w-full flex justify-center items-center"></div>;
+        });
+
+
+        // --- Partner List Component ---
+        const PartnerList = memo(({ details }) => {
+             if (!details || details.length === 0) { return null; }
+             return ( <div className="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg"> <h2 className="text-xl font-semibold text-gray-700 mb-4">Partner Details</h2> <div className="space-y-4"> {details.map(detail => ( <Card key={detail.id} id={detail.id} className="bg-white shadow-sm transition-colors duration-200"> <CardHeader> <CardTitle>{detail.title}</CardTitle> </CardHeader> <CardContent> {detail.airlinePartners && detail.airlinePartners.length > 0 && ( <div> <h4 className="partner-category-title text-sm">Airline Partners ({detail.airlinePartners.length})</h4> <ul className="list-disc list-inside text-gray-600 space-y-1 text-sm"> {detail.airlinePartners.map(partner => (<li key={partner}>{partner}</li>))} </ul> </div> )} {detail.hotelPartners && detail.hotelPartners.length > 0 && ( <div className={detail.airlinePartners && detail.airlinePartners.length > 0 ? 'mt-3' : ''}> <h4 className="partner-category-title text-sm">Hotel Partners ({detail.hotelPartners.length})</h4> <ul className="list-disc list-inside text-gray-600 space-y-1 text-sm"> {detail.hotelPartners.map(partner => (<li key={partner}>{partner}</li>))} </ul> </div> )} {(!detail.airlinePartners || detail.airlinePartners.length === 0) && (!detail.hotelPartners || detail.hotelPartners.length === 0) && ( <p className="text-sm text-gray-500 italic">No specific partners found for this segment.</p> )} </CardContent> </Card> ))} </div> </div> );
+        });
+
+
+        // --- Main App Component ---
+        function App() {
+          const [numCards, setNumCards] = useState(2);
+          const [selectedPrograms, setSelectedPrograms] = useState(['amex', 'chase']); // Default Amex & Chase
+          const [vennData, setVennData] = useState([]);
+          const [partnerListDetails, setPartnerListDetails] = useState([]);
+          const [statusMessage, setStatusMessage] = useState('');
+          const [isReadyForDiagram, setIsReadyForDiagram] = useState(false);
+
+           useEffect(() => { const currentValidSelections = selectedPrograms.filter(p => p && p !== ''); const newSelection = Array(numCards).fill(''); newSelection[0] = 'amex'; if (numCards >= 2) { const previousChaseIndex = currentValidSelections.indexOf('chase'); if (previousChaseIndex === 1) { newSelection[1] = 'chase'; } else if (previousChaseIndex !== 0 && currentValidSelections.length >= 2 && !newSelection[1]) { newSelection[1] = 'chase'; } else if (!newSelection[1]) { newSelection[1] = 'chase'; } } let currentIdx = 2; for(let i = 0; i < currentValidSelections.length && currentIdx < numCards; i++) { const prog = currentValidSelections[i]; if (!newSelection.includes(prog)) { newSelection[currentIdx++] = prog; } } setSelectedPrograms(newSelection); setIsReadyForDiagram(false); setStatusMessage('Select programs to compare.'); }, [numCards]);
+           useEffect(() => { const selections = selectedPrograms.filter(p => p && p !== ''); const hasEmpty = selectedPrograms.some(p => !p || p === ''); const hasDuplicates = new Set(selections).size !== selections.length; let ready = false; if (hasEmpty) { setStatusMessage('Please select a program for each dropdown.'); } else if (hasDuplicates) { setStatusMessage('Please select unique programs for comparison.'); } else if (selections.length < 2) { setStatusMessage('Please select at least 2 programs to compare.'); } else { setStatusMessage(''); ready = true; } setIsReadyForDiagram(ready); if (ready) { const data = generateVennData(selections); setVennData(data); setPartnerListDetails(generatePartnerListDetails(data, selections)); } else { setVennData([]); setPartnerListDetails([]); } }, [selectedPrograms]);
+
+          // --- Helper Functions ---
+          const generateVennData = (selectedKeys) => { if (!selectedKeys || selectedKeys.length < 2) return []; const sets = []; selectedKeys.forEach(key => { if (!transferPartnersData[key]) return; const allProgramPartners = getAllPartners(key); sets.push({ sets: [key], size: allProgramPartners.size, label: transferPartnersData[key].name, partners: allProgramPartners }); }); const numPrograms = selectedKeys.length; for (let i = 1; i < (1 << numPrograms); i++) { const currentCombinationKeys = []; let intersection = null; for (let j = 0; j < numPrograms; j++) { if ((i >> j) & 1) { const currentKey = selectedKeys[j]; currentCombinationKeys.push(currentKey); const currentAllPartners = getAllPartners(currentKey); if (intersection === null) { intersection = new Set(currentAllPartners); } else { intersection = new Set([...intersection].filter(p => currentAllPartners.has(p))); } } } if (currentCombinationKeys.length >= 2) { let alreadyExists = sets.some(s => s.sets.length === currentCombinationKeys.length && s.sets.every(k => currentCombinationKeys.includes(k))); if (!alreadyExists) { sets.push({ sets: currentCombinationKeys, size: intersection.size, partners: intersection }); } } } return sets.filter(s => s.size !== undefined); };
+
+          // Updated generatePartnerListDetails to handle Alaska display note and sort common first
+          const generatePartnerListDetails = (vennSets, selectedKeys) => {
+              if (!vennSets || vennSets.length === 0 || !selectedKeys || selectedKeys.length === 0) return [];
+              let details = [];
+              const processedPartners = new Set();
+
+              const segmentDetails = vennSets.map(area => {
+                  const intersectionPartners = area.partners;
+                  let uniqueToSegmentPartners = new Set();
+                  intersectionPartners.forEach(partner => {
+                      let isInHigherOrderIntersection = false;
+                      vennSets.forEach(higherArea => {
+                          if (higherArea.sets.length > area.sets.length && higherArea.partners.has(partner)) {
+                              if (area.sets.every(s => higherArea.sets.includes(s))) { isInHigherOrderIntersection = true; }
+                          }
+                      });
+                      // Only add if it's truly unique to this segment level
+                      if (!isInHigherOrderIntersection) {
+                           // Verify it actually belongs to all programs in this segment
+                           let belongsToAllInSegment = area.sets.every(key => getAllPartners(key).has(partner));
+                           if(belongsToAllInSegment) {
+                              uniqueToSegmentPartners.add(partner);
+                           }
+                      }
+                  });
+                   // Refine: Remove partners that belong to a more specific intersection that *contains* this segment
+                   vennSets.forEach(specificArea => {
+                       if (specificArea.sets.length > area.sets.length && area.sets.every(s => specificArea.sets.includes(s))) {
+                           specificArea.partners.forEach(p => {
+                               if (uniqueToSegmentPartners.has(p)) {
+                                   // Check if 'p' is *also* unique to the more specific area
+                                   let pIsUniqueToSpecific = true;
+                                   vennSets.forEach(evenMoreSpecificArea => {
+                                        if (evenMoreSpecificArea.sets.length > specificArea.sets.length && specificArea.sets.every(s => evenMoreSpecificArea.sets.includes(s)) && evenMoreSpecificArea.partners.has(p)) {
+                                            pIsUniqueToSpecific = false;
+                                        }
+                                   });
+                                   if (pIsUniqueToSpecific) {
+                                       uniqueToSegmentPartners.delete(p);
+                                   }
+                               }
+                           });
+                       }
+                   });
+
+                  return { area, uniquePartners: uniqueToSegmentPartners };
+              });
+
+
+              segmentDetails.sort((a, b) => b.area.sets.length - a.area.sets.length)
+                  .forEach(({ area, uniquePartners }) => {
+                      const airlinePartners = [];
+                      const hotelPartners = [];
+                      uniquePartners.forEach(partner => {
+                          if (processedPartners.has(partner)) return;
+
+                          let isAirline = false, isHotel = false;
+                          let displayName = partner;
+
+                          // Check categories and modify display name for Alaska/Amex
+                          area.sets.forEach(key => {
+                              if (transferPartnersData[key]?.airlines?.has(partner)) isAirline = true;
+                              if (transferPartnersData[key]?.hotels?.has(partner)) isHotel = true;
+                          });
+                          // Fallback check
+                           if (!isAirline && !isHotel) {
+                                selectedKeys.forEach(key => {
+                                    if (transferPartnersData[key]?.airlines?.has(partner)) isAirline = true;
+                                    if (transferPartnersData[key]?.hotels?.has(partner)) isHotel = true;
+                                });
+                           }
+                           // Modify display name if Alaska and Amex is involved in this segment
+                           if (partner === "Alaska Airlines Mileage Plan" && area.sets.includes('amex')) {
+                               displayName = "Alaska Airlines Mileage Plan (via Hawaiian)*";
+                           }
+
+                          if (isAirline) airlinePartners.push(displayName);
+                          if (isHotel) hotelPartners.push(displayName);
+                          processedPartners.add(partner);
+                      });
+
+                      if (airlinePartners.length > 0 || hotelPartners.length > 0) {
+                          const programNames = area.sets.map(key => transferPartnersData[key].name);
+                          let title = programNames.join(' & ');
+                          if (area.sets.length === 1) title += ' Only';
+                          const totalSegmentPartners = new Set([...airlinePartners, ...hotelPartners]).size;
+                          title += ` (${totalSegmentPartners})`;
+                          details.push({
+                              id: "list-" + area.sets.join('-'),
+                              title: title,
+                              setCount: area.sets.length,
+                              airlinePartners: airlinePartners.sort(),
+                              hotelPartners: hotelPartners.sort()
+                          });
+                      }
+                  });
+
+              // Sort final list: common partners (setCount > 1) first, then single partners, then alphabetical
+              details.sort((a, b) => {
+                  if (a.setCount !== b.setCount) {
+                      return b.setCount - a.setCount; // Higher count (more overlap) first
+                  }
+                  return a.title.localeCompare(b.title); // Then alphabetical
+              });
+              return details;
+          };
+
+
+          // --- Render ---
+          return (
+            <div className="min-h-screen p-4 md:p-8">
+              <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-lg p-6 md:p-10">
+                <h1 className="text-2xl md:text-3xl font-bold text-center text-gray-800 mb-8">Credit Card Partner Comparison</h1>
+                {/* Controls */}
+                <div className="flex flex-col md:flex-row md:items-center md:justify-center gap-4 md:gap-6 mb-6 flex-wrap">
+                  {/* Number of Cards Selector */}
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="numCardsSelector" className="font-medium text-gray-700 whitespace-nowrap text-sm">Compare:</label>
+                    <select id="numCardsSelector" value={numCards} onChange={(e) => setNumCards(parseInt(e.target.value))} className="flex h-10 items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 w-full md:w-auto"> <option value={2}>2 Programs</option> <option value={3}>3 Programs</option> <option value={4}>4 Programs</option> <option value={5}>5 Programs</option> </select>
+                  </div>
+                  {/* Dynamic Program Selectors */}
+                  {Array.from({ length: numCards }).map((_, i) => ( <div key={i} className="flex items-center gap-2"> <label htmlFor={`programSelector-${i}`} className="sr-only">Program {i + 1}</label> <select id={`programSelector-${i}`} value={selectedPrograms[i] || ''} onChange={(e) => { const newSelections = [...selectedPrograms]; newSelections[i] = e.target.value; setSelectedPrograms(newSelections); }} className="flex h-10 items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 min-w-[150px] w-full md:w-auto"> <option value="" disabled>Select Program {i + 1}</option> {programKeys.map(key => (<option key={key} value={key}>{transferPartnersData[key].name}</option>))} </select> </div> ))}
+                </div>
+                {/* Status Message */}
+                <div className="text-center text-red-600 font-medium mb-4 h-6">{statusMessage || ''}</div>
+                <Separator className="my-6" />
+
+                {/* Diagram Area */}
+                <div className="w-full">
+                    {isReadyForDiagram ? (
+                        <VennDiagram data={vennData} partnerDetails={partnerListDetails} />
+                     ) : (
+                        <div className="min-h-[300px] md:min-h-[400px] flex justify-center items-center">
+                            <p className="text-center text-gray-500">{statusMessage ? 'Please resolve the selection issues above.' : 'Select valid unique programs to see the diagram.'}</p>
+                        </div>
+                     )}
+                </div>
+
+                {/* Award Booking Links */}
+                <Separator className="my-8" />
+                <div className="text-center px-4">
+                    <h3 className="text-lg font-semibold text-gray-700 mb-3">Award Booking Tools</h3>
+                    <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm">
+                        <a href="https://point.me" target="_blank" rel="noopener noreferrer" className="tool-link">point.me (Flights)</a>
+                        <a href="https://seats.aero" target="_blank" rel="noopener noreferrer" className="tool-link">seats.aero (Flights)</a>
+                        <a href="https://rooms.aero" target="_blank" rel="noopener noreferrer" className="tool-link">rooms.aero (Hotels)</a>
+                    </div>
+                </div>
+
+                 {/* Footnote for Alaska Transfer - Moved Here */}
+                 {isReadyForDiagram && selectedPrograms.includes('amex') && (
+                     <p className="footnote">
+                         * Note: Partners marked with "(via Hawaiian)*" indicate an indirect transfer from Amex via Hawaiian Airlines, which may end following the Alaska/Hawaiian merger integration (potentially late 2025 or beyond). Check transfer ratios and availability before transferring points.
+                     </p>
+                 )}
+
+                {/* Partner List Area */}
+                {isReadyForDiagram && partnerListDetails.length > 0 && (
+                  <>
+                      <Separator className="my-6" />
+                      <PartnerList details={partnerListDetails} />
+                      {/* Footnote moved above */}
+                  </>
+                )}
+
+              </div>
+            </div>
+          );
+        }
+
+        // --- Mount the App ---
+        ReactDOM.render(<App />, document.getElementById('root'));
+
+    </script>
+</body>
+</html>
